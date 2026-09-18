@@ -1,57 +1,24 @@
 # 依赖
 node_modules/
-.pnp
-.pnp.js
 
 # 构建产物
 dist/
-dist-ssr/
-build/
-*.local
+
 
 # Vite / 构建缓存
 .vite/
-.cache/
-.turbo/
-.eslintcache
-*.tsbuildinfo
+
 
 # 测试与覆盖率
-coverage/
-.nyc_output/
-playwright-report/
-test-results/
+
 
 # 环境变量（保留 .env.example）
 .env
 .env.*
-!.env.example
 
 # 日志
 logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+
 
 # 编辑器与 IDE
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.example.json
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# 系统文件
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-Thumbs.db
-ehthumbs.db
-desktop.ini
