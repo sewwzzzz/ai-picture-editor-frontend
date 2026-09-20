@@ -1,3 +1,6 @@
+import { RouterProvider } from 'react-router-dom'
+import { router } from './router'
+
 export const App = () => {
-  return <h1>ai-picture-editor-frontend</h1>
+  return <RouterProvider router={router} />
 }

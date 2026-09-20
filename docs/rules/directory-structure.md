@@ -74,6 +74,7 @@ src/
 - **放什么**：页面级组件，职责是**把 features/components 拼成一个页面**，以及页面的加载态、错误边界。
 - **`routes/` vs `pages/`**：配置式路由用 `routes/`（路由对象 + 页面组件同层）；文件式路由用 `pages/`（文件名即路径）。二者取其一，不要同时存在。
 - **不放什么**：具体业务逻辑 —— 页面只做装配，逻辑下沉到 feature。
+- **路由实例位置**：`createBrowserRouter` 生成的 router 对象只放 `src/app/router.tsx`，不要在 `routes/` 内创建 router；`routes/` 只放页面组件与布局。
 
 ### `types/` — 全局类型
 
