@@ -215,3 +215,186 @@ const snap = useSnapshot(state); snap.count
 | 细粒度更新 | 只重渲染用到的组件 | 画布高频更新不卡的关键 |
 
 **一句话**：这六个词都是用来回答同一个问题——"加状态要写多少、改一处会拖垮多少、在 React 外好不好取"。Zustand 在这六项里综合最均衡（样板少、不需 Provider、细粒度），所以它被推荐。
+
+
+承接上一轮——我刚说「RouterProvider 把新 location 放进 Context」，这里就讲清 Context 里到底装了什么。
+
+## 短答
+
+Context 里装的是**被注入的那个共享对象**。归纳起来只有两类内容：
+
+1. **稳定的实例引用**（store、history、queryClient）→ 用于注入
+2. **会变的当前状态**（location、theme 值、router.state）→ 用于更新
+
+而**装的是哪一类，正好决定了 Context 是否兼作更新通道**——这就是上一轮那个区分的根因。
+
+---
+
+## React Router 的 Context（我们选的方案）
+
+RR 里**不是一个 Context，而是一组内部 Context**（以 `UNSAFE_` 前缀导出，表示内部实现、不建议业务直接用）：
+
+| Context | 装什么 | 供哪个 hook 读 |
+|---|---|---|
+| `UNSAFE_NavigationContext` | `{ basename, navigator(history 对象), static, future }` —— **导航 API** | `useNavigate()` |
+| `UNSAFE_LocationContext` | `{ location, navigationType }` —— **当前地址** | `useLocation()` |
+| `UNSAFE_RouteContext` | `{ outlet, matches, isDataRoute }` —— **匹配到的路由记录** | `useParams()`、`useOutlet()` |
+| `UNSAFE_DataRouterContext` | router 实例本身 | — |
+| `UNSAFE_DataRouterStateContext` | router 当前 state：`{ location, navigation, loaderData, actionData, errors, ... }` | `useNavigation()`、`useLoaderData()`、`useRouteError()` |
+
+**关键点**：RR 的 Context 里**两类东西都有**——
+
+- `navigator`（history 对象）= **稳定实例** → 纯注入，从不变化
+- `location` / `router.state` = **会变的状态** → 这就是「Context 值变化触发重渲染」的来源
+
+这正好把上一轮漏洞 1 的链路补全了：
+
+```
+router.subscribe() 感知导航
+      ↓
+RouterProvider 把新 state 塞进 LocationContext / DataRouterStateContext
+      ↓
+Context 值变了 → 所有 consumer 重渲染
+```
+
+---
+
+## 对比 Redux 的 Context
+
+`ReactReduxContext` 里装的是：
+
+```
+{ store, subscription, serverState }
+```
+
+- `store` 是**稳定引用**——创建后几乎永不变化
+- 所以 **Redux 的 Context 里没有「会变的状态值」**，Context 几乎不变 → 更新只能靠 `useSyncExternalStore`
+
+**这就是 RR 与 Redux 的分水岭**：
+- RR 的 Context 里有个**会变的 `location`** → Context 天然是更新通道
+- Redux 的 Context 里只有**不变的 `store`** → Context 只做注入
+
+---
+
+## 横向对照
+
+| Provider | Context 里装什么 | 性质 | 是否兼作更新通道 |
+|---|---|---|---|
+| React Router | history 实例 **+** 会变的 location / router.state | 两类都有 | ✅ 是（后半段） |
+| Redux | store 实例（稳定） | 只有稳定实例 | ❌ 否 |
+| ThemeProvider | `{ theme, setTheme }` —— 当前值 + setter | 会变的值 | ✅ 是 |
+| QueryClientProvider | QueryClient 实例 | 稳定实例 | ❌ 否 |
+| Valtio（ValtioProvider，可选） | 仅 scope 边界 | 作用域 | ❌ 否 |
+| Zustand 默认 | **无 Context** | 模块单例 | — |
+
+---
+
+## 归纳成一句话
+
+**Context 装什么，就决定它扮演什么角色**：
+
+- 只装**稳定实例** → Context 是纯注射器（Redux / Query）
+- 只装**会变的状态** → Context 同时是更新通道（Theme）
+- **两者都装** → 既注入又更新（**React Router**）
+
+所以上一轮说的「有的库靠 Context 更新、有的不靠」，根因不是设计哲学不同，而是**它们往 Context 里放的东西性质不同**——RR 放了个会变的 `location` 进去，Redux 没有。
+
+---
+
+补充一句：如果你问的是 **React Context 对象本身的构成**，那它只有 `createContext()` 返回的那点东西——`{ Provider, Consumer, displayName }` 及内部维护的当前值，本身不存数据；**数据都在你传给 `<Provider value={...}>` 的那个 `value` 里**，上面表格讲的就是各库往这个 `value` 里放了什么。
+
+
+
+承接上一轮的两类划分，这里讲清它们各自**扮演什么角色**。
+
+## 一句话
+
+| | 作用 | 回答的问题 |
+|---|---|---|
+| **实例引用** | 给你**操作入口**（去哪拿、怎么改） | 「我该找谁办事？」 |
+| **会变的状态** | 给你**当前值 + 变化通知** | 「现在是什么？」 |
+
+---
+
+## 实例引用：注入「能力」
+
+例如 Redux 的 `store`、RR 的 `navigator`(history)、`QueryClient`。
+
+**作用**：
+1. **让你调用方法**——`store.dispatch()`、`navigate('/editor')`、`queryClient.fetchQuery()`。
+2. **让你按需取数据**——`store.getState()` 拿到当前快照。
+3. **划定权限边界**——只有 Provider 下方的组件才拿得到这个入口。
+
+**关键特性**：
+- 它**自身不变**（创建后引用稳定）→ 放进 Context 也**不会引起重渲染**。
+- 但——**拿到引用 ≠ 拿到数据，更 ≠ 拿到变化通知**。
+
+```tsx
+const store = useStore()   // 拿到遥控器
+// store 还是那个 store，但里面 count 已经从 0 变成 5 了 —— 组件不会因此重渲染
+```
+
+想让组件跟着变，必须**自己再去订阅**（`useSyncExternalStore` / `useSelector`）。这就是 Redux 为什么非得配 `useSyncExternalStore`——Context 只递了遥控器，没递画面。
+
+---
+
+## 会变的状态：注入「当前值」并自动推送
+
+例如 RR 的 `location`、Theme 的 `theme`。
+
+**作用**：
+1. **直接渲染**——`<div>{theme}</div>`、根据 `location.pathname` 决定渲染哪个页面。
+2. **变化即推送**——值一变，Context 自动通知**所有 consumer** 重渲染，组件**被动接收**，不用自己订阅。
+
+**关键特性**：
+- 它**会变** → 变化**就是**重渲染信号。
+- 代价：**粗粒度**——所有读它的组件一起重渲染，无法只挑关心的字段。
+
+---
+
+## 核心差异：拉 vs 推
+
+这才是两者最本质的分工区别：
+
+| | 实例引用（订阅 / 拉） | 会变状态（Context / 推） |
+|---|---|---|
+| 数据怎么到手 | 自己订阅、自己取 | 自动推给你 |
+| **重渲染粒度** | **细**——selector 只订阅关心的字段 | **粗**——凡读必重渲染 |
+| 谁决定重渲染 | 组件自己（订阅了才渲染） | Context（无法筛选） |
+| 代价 | 要写订阅代码 | 无需额外代码，但可能**过度重渲染** |
+
+**这正好解释了你 `xx.md` 第 6 节「细粒度更新」**：Redux / Zustand 之所以选「实例引用 + `useSyncExternalStore`」而不是「把状态塞进 Context」，就是为了绕开 Context 的粗粒度推送——让改 `count` 只重渲染 `Counter`，而不是整棵树。
+
+---
+
+## 两个类比
+
+- **遥控器 vs 画面**：实例引用是**遥控器**（拿着能换台，遥控器本身不变）；会变状态是**电视画面**（直接看到内容，画面一变你就看到新内容）。
+- **账号 vs 余额**：实例引用是**银行账号**（不变，凭它存取）；会变状态是**余额**（会变，变了要刷新显示）。
+
+---
+
+## 为什么 RR 两个都要
+
+| 放的东西 | 类型 | 为什么需要 |
+|---|---|---|
+| `navigator` (history) | 实例引用 | 需要**调用** `navigate()` 跳转——这是「能力」 |
+| `location` / `router.state` | 会变状态 | 需要**根据地址渲染**不同页面，且地址一变就要重渲染 |
+
+缺任何一个都不行：只有 navigator 而没有 location 进 Context，页面不会随导航刷新；只有 location 而没有 navigator，就没法触发跳转。
+
+---
+
+## 落回本项目（实用结论）
+
+自己写 Provider 时按这个分：
+
+| 放什么 | 适合场景 |
+|---|---|
+| **实例引用** | 「能力型」依赖——请求 client、store、Konva 封装；**且追求细粒度性能** |
+| **会变状态** | 「全局且不频繁变」的值——theme、locale、用户信息；图省事 |
+| ❌ **别放** | **高频变化的状态**——画布缩放、鼠标坐标、拖拽中间态 |
+
+最后一条对 AI 修图工具尤其要紧：`zoom`、`cursor`、`dragging` 这类**每帧都在变**的东西塞进 Context，会让整棵树跟着重渲染，画布直接卡死。这类应该走 **Zustand/Valtio 的订阅**（细粒度，只有真正用它的组件重渲染）。
+
+这也和 `xx.md` 第 6 节、以及「画布事件回调要在 React 外读状态」那条的结论是一致的。需要我把「拉 vs 推 / 高频状态别进 Context」这条落进 `xx.md` 吗？
