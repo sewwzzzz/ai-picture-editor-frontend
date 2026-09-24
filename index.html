@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI 修图工具</title>
+    <script>
+      // 首帧绘制前定好主题，避免刷新闪烁（FOUC）；键名与 app-theme 保持一致
+      ;(() => {
+        try {
+          const stored = localStorage.getItem('app-theme')
+          const theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+          const root = document.documentElement
+          root.dataset.theme = theme
+          root.style.colorScheme = theme
+        } catch {
+          /* localStorage 不可用时回落 CSS 默认值 */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

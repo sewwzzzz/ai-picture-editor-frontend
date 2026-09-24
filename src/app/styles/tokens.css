@@ -1,0 +1,39 @@
+/**
+ * 语义 token 唯一真源。
+ *
+ * 约定：
+ * 1. 组件样式只准消费这里的变量，禁止硬编码色值。
+ * 2. 命名一律语义（primary / surface），不取色名（black / gray-900）。
+ * 3. 新增主题 = 加一段 [data-theme='xxx'] 覆盖，组件零改动。
+ */
+
+:root {
+  --color-bg: #f6f6f4;
+  --color-surface: #ffffff;
+  --color-fg: #1c1c1a;
+  --color-fg-muted: #71717a;
+  --color-border: #e4e4e7;
+  --color-primary: #18181b;
+  --color-primary-fg: #ffffff;
+  --color-accent: #edf1f5;
+  --color-accent-fg: #1c1c1a;
+
+  --radius-card: 12px;
+  --radius-control: 8px;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
+}
+
+[data-theme='dark'] {
+  --color-bg: #0f0f10;
+  --color-surface: #1a1a1d;
+  --color-fg: #f4f4f5;
+  --color-fg-muted: #9d9da6;
+  --color-border: #2a2a2e;
+  --color-primary: #f4f4f5;
+  --color-primary-fg: #18181b;
+  --color-accent: #232329;
+  --color-accent-fg: #f4f4f5;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+}

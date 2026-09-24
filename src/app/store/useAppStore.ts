@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getInitialTheme } from '@/app/theme/theme-storage'
 
 export type ThemeMode = 'light' | 'dark'
 
@@ -14,7 +15,7 @@ interface AppState {
  * 业务领域状态后续放 `features/<name>/stores/`，不要堆到这里。
  */
 export const useAppStore = create<AppState>((set) => ({
-  theme: 'light',
+  theme: getInitialTheme(),
   setTheme: (theme) => set({ theme }),
   toggleTheme: () => set((s) => ({ theme: s.theme === 'light' ? 'dark' : 'light' })),
 }))

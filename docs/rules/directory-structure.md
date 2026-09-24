@@ -67,7 +67,9 @@ src/
 
 - **放什么**：**有状态、有依赖、需要初始化配置**的封装，例如 axios/fetch 请求实例（含统一错误与 401 拦截）、Query Client、SSE 客户端、Konva 封装。
 - **与 `utils/` 的区别**：`lib` 有外部依赖或内部状态；`utils` 是纯函数。
-- **不放什么**：纯计算函数（那些去 `utils/`）。
+- **不放什么**：纯计算函数（那些去 `utils/`）；**具体业务接口**（那些去 `features/<name>/api/`，本目录只放「通用客户端实例」本身）。
+- **耦合边界**：请求实例（如 `api-client.ts`）**禁止 import 路由层**；401 等跨层副作用用「钩子 / 回调」在 `app/` 装配处注入，避免 `lib` → `router` 反向依赖。
+- **`api-client` 与 `sse-client` 相互独立**：HTTP 请求走 axios 实例；SSE 长连接走原生 `EventSource`（`sse-client.ts`），**不经过 axios**——二者平级放在 `lib/`，互不依赖。
 
 ### `routes/`（或 `pages/`）— 路由与页面
 
@@ -102,6 +104,7 @@ src/features/<feature-name>/
 
 - **公共 API 规则**：其他模块只能从 `features/<name>` 的 `index.ts` 导入，**禁止直穿内部文件**（如 `features/auth/components/LoginForm`）。
 - **只暴露必要的东西**：不要用 `export * from './...'` 通配导出。
+- **`api/` 的粒度与内聚**：一个接口一个文件；文件内聚「裸请求函数 + `queryKey` + `useXxx` hook」，三者同文件以免 `queryKey` 写散、失效时漏配。
 
 ## 4. 拿不准时的判定规则（自上而下判断）
 
