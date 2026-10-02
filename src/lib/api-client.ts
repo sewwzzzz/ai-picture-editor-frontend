@@ -2,33 +2,60 @@ import axios from 'axios'
 import type { AxiosError, AxiosResponse } from 'axios'
 import { env } from '@/config/env'
 
-/** 归一后的错误类别 */
-export type ApiErrorKind = 'network' | 'http' | 'business' | 'aborted'
+/**
+ * 归一后的错误分类码。
+ * 由 HTTP 状态码派生 —— 后端不提供任何机器码，错误文案只在 `detail` 字段。
+ * 判定表见 docs/rules/error-handling.md 第 3 节。
+ */
+export type ApiErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'VALIDATION'
+  | 'SERVER'
+  | 'NETWORK'
+  | 'TIMEOUT'
+  | 'ABORTED'
+  | 'UNKNOWN'
+
+/** 422 的字段级错误：`field` 取自 `detail[].loc`，`message` 取自 `msg` */
+export interface ApiFieldError {
+  field: string
+  message: string
+}
 
 interface ApiErrorOptions {
-  kind: ApiErrorKind
+  code: ApiErrorCode
+  expected: boolean
+  retryable: boolean
   message: string
+  fields?: ApiFieldError[]
   status?: number
-  code?: string
   payload?: unknown
 }
 
 /**
  * 项目统一的 API 错误类型。
- * 拦截器把所有失败归一为此类型，调用方只需 catch 一种东西即可。
+ * 拦截器把所有失败归一为此类型，调用方只需 catch 一种东西即可，
+ * 并按 `code` 分派 UI —— 不要按 `status` 散写 if，也不要解析 `message` 做分支。
  */
 export class ApiError extends Error {
-  readonly kind: ApiErrorKind
+  readonly code: ApiErrorCode
+  readonly expected: boolean
+  readonly retryable: boolean
+  readonly fields?: ApiFieldError[]
   readonly status?: number
-  readonly code?: string
   readonly payload?: unknown
 
   constructor(options: ApiErrorOptions) {
     super(options.message)
     this.name = 'ApiError'
-    this.kind = options.kind
-    this.status = options.status
     this.code = options.code
+    this.expected = options.expected
+    this.retryable = options.retryable
+    this.fields = options.fields
+    this.status = options.status
     this.payload = options.payload
   }
 }
@@ -45,7 +72,9 @@ export const apiClient = axios.create({
 
 /**
  * 401 的处理钩子。
- * M0 只预留：无登录页，不做跳转。M1 接入认证后在此注入重定向逻辑。
+ * M0 只预留：无登录页，不做跳转。M1 接入认证后在此注入重定向逻辑
+ * —— 届时须排除 login / register 的 401（那是密码错误，不是会话过期），
+ * 详见 docs/rules/error-handling.md 第 5 节。
  */
 type UnauthorizedHandler = (error: ApiError) => void
 
@@ -55,16 +84,74 @@ export const setUnauthorizedHandler = (handler: UnauthorizedHandler): void => {
   unauthorizedHandler = handler
 }
 
-/** 后端信封里的业务失败标记（HTTP 仍是 2xx，但业务层面失败） */
-interface BusinessEnvelope {
-  success?: boolean
-  message?: string
+/** 一次错误分类所需的三个判定维度 */
+interface ErrorSpec {
+  code: ApiErrorCode
+  expected: boolean
+  retryable: boolean
 }
 
-const readBusinessFailure = (data: unknown): BusinessEnvelope | null => {
-  if (typeof data !== 'object' || data === null) return null
-  const envelope = data as BusinessEnvelope
-  return envelope.success === false ? envelope : null
+/**
+ * 状态码 → 分类的映射（唯一定义处）。
+ * 业务码皆「预料中且不可重试」——409 虽不可重试，但通常应先刷新状态让用户重做。
+ */
+const EXPECTED_SPECS: Record<number, ErrorSpec> = {
+  401: { code: 'UNAUTHENTICATED', expected: true, retryable: false },
+  404: { code: 'NOT_FOUND', expected: true, retryable: false },
+  409: { code: 'CONFLICT', expected: true, retryable: false },
+  413: { code: 'PAYLOAD_TOO_LARGE', expected: true, retryable: false },
+  422: { code: 'VALIDATION', expected: true, retryable: false },
+}
+
+const SERVER_SPEC: ErrorSpec = { code: 'SERVER', expected: false, retryable: true }
+const ABORTED_SPEC: ErrorSpec = { code: 'ABORTED', expected: false, retryable: false }
+const UNKNOWN_SPEC: ErrorSpec = { code: 'UNKNOWN', expected: false, retryable: false }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+/** pydantic 的 msg 形如「Value error, 提示词不能为空」，去掉前缀才是给用户看的文案 */
+const stripPydanticPrefix = (msg: string): string => msg.replace(/^Value error,\s*/, '')
+
+/** FastAPI 校验错误项：`{ loc: [...], msg: "...", type: "..." }` */
+interface DetailEntry {
+  loc?: unknown[]
+  msg?: string
+}
+
+const readDetailEntries = (data: unknown): DetailEntry[] => {
+  if (!isRecord(data) || !Array.isArray(data.detail)) return []
+  return data.detail.filter((item): item is DetailEntry => isRecord(item))
+}
+
+/** 展示文案：`detail` 为字符串直接取；422 的数组则取首条的 msg */
+const readMessage = (data: unknown): string | undefined => {
+  if (!isRecord(data)) return undefined
+  if (typeof data.detail === 'string') return data.detail
+  const [first] = readDetailEntries(data)
+  if (first !== undefined && typeof first.msg === 'string') return stripPydanticPrefix(first.msg)
+  return undefined
+}
+
+/**
+ * 把 loc 转成字段名：去掉来源段（body / query / path），其余以 "." 连接。
+ * 无 loc（表单级错误）时返回 "_"。
+ */
+const locToField = (loc: unknown[] | undefined): string => {
+  if (loc === undefined || loc.length === 0) return '_'
+  const [, ...rest] = loc
+  if (rest.length === 0) return '_'
+  return rest.map((part) => String(part)).join('.')
+}
+
+/** 422 的字段级错误映射；其余状态码一律返回 undefined */
+const readFields = (data: unknown, status: number): ApiFieldError[] | undefined => {
+  if (status !== 422) return undefined
+  const fields = readDetailEntries(data).map((entry) => ({
+    field: locToField(entry.loc),
+    message: typeof entry.msg === 'string' ? stripPydanticPrefix(entry.msg) : '',
+  }))
+  return fields.length > 0 ? fields : undefined
 }
 
 /** 把 axios 抛出的各类错误归一化成 ApiError */
@@ -73,46 +160,37 @@ const toApiError = (error: unknown): ApiError => {
 
   const axiosError = error as AxiosError<unknown>
 
-  // 请求被取消（AbortController）不计为网络故障
+  // 主动取消（AbortController）不计为故障
   if (axiosError?.code === 'ERR_CANCELED' || axiosError?.name === 'CanceledError') {
-    return new ApiError({ kind: 'aborted', message: '请求已取消' })
+    return new ApiError({ ...ABORTED_SPEC, message: '请求已取消' })
   }
 
   const response = axiosError?.response
   if (!response) {
     const timedOut = axiosError?.code === 'ECONNABORTED'
     return new ApiError({
-      kind: 'network',
+      code: timedOut ? 'TIMEOUT' : 'NETWORK',
+      expected: false,
+      retryable: true,
       message: timedOut ? '请求超时，请稍后重试' : '网络异常，请检查连接',
-      code: axiosError?.code,
     })
   }
 
-  const business = readBusinessFailure(response.data)
+  const status = response.status
+  const spec = EXPECTED_SPECS[status] ?? (status >= 500 ? SERVER_SPEC : UNKNOWN_SPEC)
+
   return new ApiError({
-    kind: business ? 'business' : 'http',
-    message: business?.message ?? `请求失败（HTTP ${response.status}）`,
-    status: response.status,
+    ...spec,
+    message: readMessage(response.data) ?? `请求失败（HTTP ${status}）`,
+    fields: readFields(response.data, status),
+    status,
     payload: response.data,
   })
 }
 
 apiClient.interceptors.response.use(
-  (response: AxiosResponse) => {
-    // 兜底：HTTP 2xx 但后端信封标记为失败的，也归一成 business 错误
-    const business = readBusinessFailure(response.data)
-    if (business) {
-      return Promise.reject(
-        new ApiError({
-          kind: 'business',
-          message: business.message ?? '业务处理失败',
-          status: response.status,
-          payload: response.data,
-        })
-      )
-    }
-    return response
-  },
+  // 成功响应原样透传：2xx 但业务体标记失败的情况（目前仅健康检查）交给调用方自行判定
+  (response: AxiosResponse) => response,
   (error: unknown) => {
     const apiError = toApiError(error)
     if (apiError.status === 401) unauthorizedHandler?.(apiError)

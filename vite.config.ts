@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       // 转发到后端并保持同源：认证用 httpOnly Cookie，同源才会自动携带
+      // 浏览器 http://localhost:5173/api/ -> vite proxy http://<target>/api/ -> 后端
       proxy: {
         '/api': {
           target: proxyTarget,

@@ -18,6 +18,11 @@
   --color-accent: #edf1f5;
   --color-accent-fg: #1c1c1a;
 
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #dc2626;
+  --color-danger-surface: #fef2f2;
+
   --radius-card: 12px;
   --radius-control: 8px;
 
@@ -34,6 +39,11 @@
   --color-primary-fg: #18181b;
   --color-accent: #232329;
   --color-accent-fg: #f4f4f5;
+
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-danger-surface: #2a1a1c;
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
 }

@@ -20,12 +20,17 @@
 6. 有状态 / 需初始化的封装放 `lib/`；纯函数放 `utils/`。
 7. `routes/` 与 `pages/` **二选一**，不得同时存在。
 8. 只被一个 feature 用的东西留在该 feature 内，**出现第二次复用才提升**到顶层。
+9. 错误识别以 **HTTP 状态码**为唯一机器主键；**禁止解析后端 `detail` 文案**做业务分支（文案只用于展示）。
+10. 请求错误一律归一为统一错误类型，UI **按分类码分派**、不按 `status` 散写 if；401 由统一钩子处理，**`login` / `register` 除外**。
 
 ## 规则索引（按需查阅）
 
 | 关注点 | 文件 | 何时读 |
 | --- | --- | --- |
 | 目录结构 | [`docs/rules/directory-structure.md`](./docs/rules/directory-structure.md) | 新建 / 移动 / 重命名文件时 |
+| 错误处理 | [`docs/rules/error-handling.md`](./docs/rules/error-handling.md) | 写请求 / 处理错误 / 401 / 重试 / 错误展示时 |
+
+> 上表两项均有 IDE 侧自动加载镜像：`.codebuddy/rules/frontend-structure.md`、`.codebuddy/rules/error-handling.md`（摘要 + 指向本表完整规范，内容不得与 `docs/rules/` 冲突，冲突以 `docs/rules/` 为准）。
 
 ## 规范文件的三层结构
 
