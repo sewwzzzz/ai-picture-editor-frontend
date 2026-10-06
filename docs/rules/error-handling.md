@@ -111,6 +111,28 @@
 
 > **层级由「分类码 + 请求上下文」共同决定**，不由分类码单独决定：同为 404，`GET /sessions/{id}` 是 L4，刷新某个素材是 L2。
 
+### L3 通道落地（全局 Toast，补 M0 复盘漏项）
+
+全局反馈通道已建好，所有反馈统一走这一条路，避免各页面各写各的：
+
+- **载体**：`app/store/useToastStore.ts` —— zustand store（`toasts` + `push` / `dismiss` / `clear`）+ 命令式门面 `toast.error / success / info / warning` + `notifyError(error)`（`ApiError.message` 归一成 error toast，不解析 `detail`）。
+- **视图**：`components/ui/Toast/Toast.tsx` 的 `ToastHost`，经 `createPortal` 挂 `document.body`（固定右上、自动消失、退场动画、可挂撤h销动作），在 `app/App.tsx` 根节点挂载一次。
+- **约定**：L3（5xx / 网络 / 超时）错误走 toast——mutation 的 `onError` 调 `notifyError(error)`；L1（422 / 413 字段级）、L2（409 / 子资源 404）在表单/页面内联，**不**走全局 toast（避免与 R5 登录/注册 401 内联冲突）。
+
+### L1 / L2 落点组件（补 M0 复盘漏项）
+
+三类落点的承载组件已定型，各页面直接消费，不再各写各的：
+
+| 层级 | 组件 | 适用 | 用法 |
+| --- | --- | --- | --- |
+| L1 字段级 | `components/ui/InlineError` | 422 字段级、413 上传超限、R5 登录/注册 401 | `<InlineError error={err} field="email" id="email-err" />`；传 `field` 只取该字段文案（无则不回退，避免重复），不传则取整体文案；无文案自动返回 `null` |
+| L2 区块/页面级 | `components/ui/ErrorPanel` | 409 业务冲突、子资源 404 | `<ErrorPanel error={err} title="无法保存" action={{ label: '重试', onClick }} />`；`error` 为空返回 `null` |
+| L3 全局 Toast | `components/ui/Toast` 的 `ToastHost` | 5xx / 网络 / 超时 | mutation 的 `onError` 调 `notifyError(error)`，详见上一小节 |
+
+配套纯函数：`utils/errorFields.ts` —— `getFieldMessage(error, field)`（按字段名取 422 文案）、`toFieldMessages(error)`（摊平成 `{字段: 文案}` 供表单批量绑定）、`getDisplayMessage(error, fallback)`（取展示文案，非 `ApiError` 给中文兜底）。
+
+> L4（主资源 404、未捕获异常）由路由占位 / ErrorBoundary 承担，**不要**用 `ErrorPanel` 顶替。
+
 ---
 
 ## 7. 重试策略（Query vs Mutation）
@@ -145,10 +167,12 @@
 | 1 | 传输层归一化改造：删除 `success` 信封判断；改从 `detail` 提取文案；422 映射为字段级错误；补齐 `code` / `expected` / `retryable` 三字段 | ✅ **M0 已完成** | `api-client.ts` 已重写：`ApiError` 改为 `code` / `expected` / `retryable`；`detail` 只取作文案；422 经 `loc` 映射为 `fields` |
 | 2 | 健康检查类型与判定修正：真实字段为 `api` / `database` / `storage`，且 **200 也可能不健康**（判 `error:` 前缀） | ✅ **M0 已完成** | `health.ts` 已改为 `{ api, database, storage }`，并新增 `isProbeHealthy` / `isHealthy` / `unhealthyProbes` 按响应体判定 |
 | 3 | 401 钩子补排除规则：`login` / `register` 的 401 不触发跳转；并发 401 去重；SSE 通道单独处理 | **M1 补** | 认证前端接入时落地 |
-| 4 | React Query 重试策略落地：仅重试 `retryable` 为真者；Mutation 默认不重试 | **M1 补** | 与服务端状态层同时落地 |
+| 4 | React Query 重试策略落地：仅重试 `retryable` 为真者；Mutation 默认不重试 | ✅ **M0 补漏已完成** | `query-client.ts`：`queries.retry` 改为函数，仅对 `ApiError.retryable` 为真者退避重试（上限 2，指数退避）；`mutations.retry:false` 显式关闭 Mutation 重试 |
 | 5 | 上传超限（413）的 L1 内联展示 | **M2 上传** | 资产前端 |
 | 6 | 导出类接口（会话导出 / 批量导出）的 blob 陷阱处理：错误体需先转文本再解析 JSON | **M3 导出** | 成功为 zip、失败为 JSON，同一接口两种响应体；批量导出（M12）同此约束 |
 | 7 | Vite 补 `/events` 代理；SSE 断线重连与保活帧忽略 | **M5 SSE** | SSE 路径**不在 `/api` 下**，当前代理只覆盖 `/api`，不补会直接连不上 |
+| 8 | 全局反馈通道（L3 全局 Toast）：zustand store + `ToastHost` + `toast` / `notifyError` 门面 | ✅ **M0 补漏已完成** | `app/store/useToastStore.ts` + `components/ui/Toast/Toast.tsx`，`App.tsx` 挂载 `ToastHost`；约定见第 6 节「L3 通道落地」 |
+| 9 | 错误展示落点组件（L1 内联 / L2 页面级）：`InlineError` + `ErrorPanel` + 字段文案提取 | ✅ **M0 补漏已完成** | `components/ui/InlineError/`、`components/ui/ErrorPanel/`、`utils/errorFields.ts`；约定见第 6 节「L1 / L2 落点组件」 |
 
 > 待办 6 归 M3 而非 M2：会话导出属画布编辑器（M3），批量导出属 M12；二者与上传无关，但同样受「同一接口两种响应体」约束。
 
@@ -168,3 +192,5 @@
 - [ ] 健康检查按 body 判定，未把 200 直接当作健康
 - [ ] 409 未靠文案区分，用的是请求上下文或 `can_undo` 类标志位
 - [ ] 归一化逻辑仍在 `lib/`，未反向依赖路由层
+- [ ] L3（5xx / 网络 / 超时）错误经 `toast` / `notifyError` 走全局 Toast
+- [ ] L1 用 `InlineError`、L2 用 `ErrorPanel`，未手写散落的红色文案；主资源 404 走 L4 路由占位而非 `ErrorPanel`
