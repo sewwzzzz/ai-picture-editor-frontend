@@ -154,6 +154,28 @@ const readFields = (data: unknown, status: number): ApiFieldError[] | undefined 
   return fields.length > 0 ? fields : undefined
 }
 
+/** 把响应体归一为可解析对象：Blob(下载场景)先读文本再 JSON.parse；解析失败返回 undefined(交给 fallback) */
+const readBody = async (data: unknown): Promise<unknown> => {
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    try {
+      return JSON.parse(await data.text())
+    } catch {
+      return undefined
+    }
+  }
+  return data
+}
+
+/** 按状态码分类并提取文案/字段，产出统一的 ApiError（与 `toApiError` 共用判定逻辑） */
+const buildApiError = (status: number, data: unknown, fallback: string): ApiError =>
+  new ApiError({
+    ...(EXPECTED_SPECS[status] ?? (status >= 500 ? SERVER_SPEC : UNKNOWN_SPEC)),
+    message: readMessage(data) ?? fallback,
+    fields: readFields(data, status),
+    status,
+    payload: data,
+  })
+
 /** 把 axios 抛出的各类错误归一化成 ApiError */
 const toApiError = (error: unknown): ApiError => {
   if (error instanceof ApiError) return error
@@ -176,16 +198,7 @@ const toApiError = (error: unknown): ApiError => {
     })
   }
 
-  const status = response.status
-  const spec = EXPECTED_SPECS[status] ?? (status >= 500 ? SERVER_SPEC : UNKNOWN_SPEC)
-
-  return new ApiError({
-    ...spec,
-    message: readMessage(response.data) ?? `请求失败（HTTP ${status}）`,
-    fields: readFields(response.data, status),
-    status,
-    payload: response.data,
-  })
+  return buildApiError(response.status, response.data, `请求失败（HTTP ${response.status}）`)
 }
 
 apiClient.interceptors.response.use(
@@ -197,3 +210,26 @@ apiClient.interceptors.response.use(
     return Promise.reject(apiError)
   }
 )
+
+/**
+ * 上传/下载(blob)场景的错误归一助手。
+ *
+ * 普通 JSON 请求由拦截器走 `toApiError` 即可；但 `responseType: 'blob'` 的下载失败时，
+ * `response.data` 是 Blob，拦截器无法同步解析其内部 JSON 错误体，故调用方在 catch 里改用本函数：
+ * 先 `text()` 再 `JSON.parse` 提取 code/message，解析不出则回退 `fallback`。
+ * 错误形态与 JSON 请求完全一致（同为 `ApiError`），上传的 JSON 错误响应也能直接复用。
+ *
+ * 用法：
+ * ```ts
+ * try {
+ *   const res = await apiClient.get(url, { responseType: 'blob' })
+ *   saveFile(res.data)
+ * } catch (e) {
+ *   const ax = e as AxiosError
+ *   if (ax.response) throw await apiError(ax.response, '下载失败')
+ *   throw e
+ * }
+ * ```
+ */
+export const apiError = async (response: AxiosResponse, fallback: string): Promise<ApiError> =>
+  buildApiError(response.status, await readBody(response.data), fallback)
