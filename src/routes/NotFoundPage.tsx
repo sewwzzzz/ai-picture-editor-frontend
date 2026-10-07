@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import styles from './NotFoundPage.module.css'
+import { buttonStyles } from '@/components/ui/Button/buttonStyles'
 
 /**
  * 路由兜底页：所有未匹配的路径都落到这里（见 app/router.tsx 的 `path: '*'`）。
@@ -10,12 +10,15 @@ import styles from './NotFoundPage.module.css'
  */
 export const NotFoundPage = () => {
   return (
-    <main className={styles.page}>
-      <section className={styles.card}>
-        <p className={styles.code}>404</p>
-        <h1 className={styles.title}>页面不存在</h1>
-        <p className={styles.meta}>你访问的地址没有对应的页面，可能已被移动或从未存在。</p>
-        <Link to="/" className={styles.link}>
+    <main className="min-h-full flex items-center justify-center p-6">
+      <section className="flex flex-col items-start gap-2 px-7 py-6 bg-surface text-fg border border-border rounded-card shadow-card">
+        <p className="m-0 text-[32px] font-semibold leading-none text-fg-muted">404</p>
+        <h1 className="m-0 text-xl">页面不存在</h1>
+        <p className="m-0 text-sm text-fg-muted">你访问的地址没有对应的页面，可能已被移动或从未存在。</p>
+        <Link
+          to="/"
+          className={buttonStyles({ variant: 'secondary', active: true, className: 'mt-2 no-underline' })}
+        >
           返回首页
         </Link>
       </section>

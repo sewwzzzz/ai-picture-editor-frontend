@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useToastStore, type ToastItem } from '@/app/store/useToastStore'
-import styles from './Toast.module.css'
+import { useToastStore, type ToastItem, type ToastVariant } from '@/app/store/useToastStore'
 
 const cx = (...classes: Array<string | false | undefined>) => classes.filter(Boolean).join(' ')
+
+const TOAST_BASE =
+  'pointer-events-auto flex items-start gap-2 px-3 py-2.5 bg-surface text-fg border border-border rounded-control shadow-card text-sm leading-[1.4]'
+
+// 左侧 3px 强调色条：! 强制覆盖 TOAST_BASE 的 border-border（左色）
+const VARIANT_BORDER: Record<ToastVariant, string> = {
+  error: 'border-l-[3px]! border-l-danger!',
+  success: 'border-l-[3px]! border-l-success!',
+  warning: 'border-l-[3px]! border-l-warning!',
+  info: 'border-l-[3px]! border-l-accent-fg!',
+}
 
 /**
  * 全局 Toast 视图层：挂一次即可服务全应用（在 app/App.tsx 挂载）。
@@ -13,7 +23,12 @@ export function ToastHost() {
   const toasts = useToastStore((s) => s.toasts)
   if (typeof document === 'undefined') return null
   return createPortal(
-    <div className={styles.host} role="region" aria-label="通知" aria-live="polite">
+    <div
+      className="fixed top-4 right-4 flex flex-col gap-2 z-[1000] pointer-events-none max-w-[min(360px,calc(100vw-32px))]"
+      role="region"
+      aria-label="通知"
+      aria-live="polite"
+    >
       {toasts.map((t) => (
         <ToastCard key={t.id} toast={t} />
       ))}
@@ -48,17 +63,31 @@ function ToastCard({ toast }: { toast: ToastItem }) {
 
   return (
     <div
-      className={cx(styles.toast, styles[toast.variant], leaving && styles.leaving)}
+      className={cx(
+        TOAST_BASE,
+        VARIANT_BORDER[toast.variant],
+        leaving ? 'animate-toast-out' : 'animate-toast-in',
+        'motion-reduce:animate-none',
+      )}
       role="alert"
       onAnimationEnd={() => leaving && remove()}
     >
-      <span className={styles.message}>{toast.message}</span>
+      <span className="flex-1 min-w-0 break-words">{toast.message}</span>
       {toast.action && (
-        <button type="button" className={styles.action} onClick={onAction}>
+        <button
+          type="button"
+          className="flex-none border-0 bg-transparent text-primary font-[inherit] font-semibold cursor-pointer p-0 underline"
+          onClick={onAction}
+        >
           {toast.action.label}
         </button>
       )}
-      <button type="button" className={styles.close} onClick={close} aria-label="关闭">
+      <button
+        type="button"
+        className="flex-none border-0 bg-transparent text-fg-muted text-[18px] leading-none cursor-pointer p-0 hover:text-fg"
+        onClick={close}
+        aria-label="关闭"
+      >
         ×
       </button>
     </div>

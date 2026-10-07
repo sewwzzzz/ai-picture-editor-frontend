@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/*
+ * 语义 token 唯一真源。
+ * @theme 将这些变量 emit 成 :root CSS 变量（var(--color-surface) 等），
+ * 同时生成工具类（bg-surface / text-fg / rounded-card / shadow-card …）。
+ * 两套写法引用同一来源；深色切换只覆盖变量，组件零重渲染。
+ *
+ * 约定：1. 组件只用工具类或 var(--token)，禁止硬编码色值；
+ *       2. 命名一律语义（primary / surface），不取色名；
+ *       3. 新增主题 = 加一段 [data-theme='xxx'] 覆盖，组件零改动。
+ */
+@theme {
+  --color-bg: #f6f6f4;
+  --color-surface: #ffffff;
+  --color-fg: #1c1c1a;
+  --color-fg-muted: #71717a;
+  --color-border: #e4e4e7;
+  --color-primary: #18181b;
+  --color-primary-fg: #ffffff;
+  --color-accent: #edf1f5;
+  --color-accent-fg: #1c1c1a;
+
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #dc2626;
+  --color-danger-surface: #fef2f2;
+
+  --radius-card: 12px;
+  --radius-control: 8px;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
+
+  --animate-toast-in: toast-in 0.2s ease;
+  --animate-toast-out: toast-out 0.15s ease forwards;
+}
+
+[data-theme='dark'] {
+  --color-bg: #0f0f10;
+  --color-surface: #1a1a1d;
+  --color-fg: #f4f4f5;
+  --color-fg-muted: #9d9da6;
+  --color-border: #2a2a2e;
+  --color-primary: #f4f4f5;
+  --color-primary-fg: #18181b;
+  --color-accent: #232329;
+  --color-accent-fg: #f4f4f5;
+
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-danger-surface: #2a1a1c;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+/* 无障碍：键盘聚焦统一焦点环（鼠标点击不显示，仅键盘 Tab 出现）。
+   描边用 --color-fg，在浅/深两套 surface 上都够对比；随主题自动翻转。 */
+:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+/* 动效降级：用户偏好「减少动效」时，全局关掉动画与过渡。
+   Toast 等依赖 animationend 的组件另有 200ms 定时器兜底移除，不受影响。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

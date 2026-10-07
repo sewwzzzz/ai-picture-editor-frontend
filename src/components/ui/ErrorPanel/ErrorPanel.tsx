@@ -1,5 +1,5 @@
 import { getDisplayMessage } from '@/utils/errorFields'
-import styles from './ErrorPanel.module.css'
+import { Button } from '@/components/ui/Button/Button'
 
 interface ErrorPanelProps {
   error: unknown
@@ -17,15 +17,18 @@ interface ErrorPanelProps {
 export function ErrorPanel({ error, title, action }: ErrorPanelProps) {
   if (!error) return null
   return (
-    <div className={styles.panel} role="alert">
-      <div className={styles.body}>
-        {title && <strong className={styles.title}>{title}</strong>}
-        <span className={styles.message}>{getDisplayMessage(error)}</span>
+    <div
+      className="flex items-start gap-3 p-3 bg-danger-surface text-fg border border-danger rounded-control text-sm leading-[1.5]"
+      role="alert"
+    >
+      <div className="flex-1 min-w-0">
+        {title && <strong className="block font-semibold">{title}</strong>}
+        <span className="break-words">{getDisplayMessage(error)}</span>
       </div>
       {action && (
-        <button type="button" className={styles.action} onClick={action.onClick}>
+        <Button variant="secondary" size="sm" className="flex-none" onClick={action.onClick}>
           {action.label}
-        </button>
+        </Button>
       )}
     </div>
   )

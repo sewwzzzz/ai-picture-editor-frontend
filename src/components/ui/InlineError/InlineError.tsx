@@ -1,5 +1,4 @@
 import { getDisplayMessage, getFieldMessage } from '@/utils/errorFields'
-import styles from './InlineError.module.css'
 
 interface InlineErrorProps {
   error: unknown
@@ -18,7 +17,7 @@ export function InlineError({ error, field, id }: InlineErrorProps) {
   const message = field ? getFieldMessage(error, field) : getDisplayMessage(error)
   if (!message) return null
   return (
-    <p className={styles.error} id={id} role="alert">
+    <p className="mt-1 text-danger text-[13px] leading-[1.4]" id={id} role="alert">
       {message}
     </p>
   )

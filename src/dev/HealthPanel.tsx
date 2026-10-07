@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { ApiError } from '@/lib/api-client'
 import { PROBE_LABELS, unhealthyProbes, useHealthQuery, type HealthResponse } from '@/lib/health'
-import styles from './HealthPanel.module.css'
+import { Button } from '@/components/ui/Button/Button'
 
 /**
  * 健康检查失败的展示文案：按 `code` 分派（error-handling.md 的 R4），
@@ -27,13 +27,13 @@ const ProbeResult = ({ health }: { health: HealthResponse }) => {
   const unhealthy = unhealthyProbes(health)
 
   if (unhealthy.length === 0) {
-    return <p className={styles.ok}>后端服务正常</p>
+    return <p className="m-0 text-[13px] text-success">后端服务正常</p>
   }
 
   return (
     <>
-      <p className={styles.warn}>部分依赖不可用，相关功能可能受影响</p>
-      <ul className={styles.list}>
+      <p className="m-0 text-[13px] text-warning">部分依赖不可用，相关功能可能受影响</p>
+      <ul className="m-0 pl-[18px] text-[13px] text-fg-muted font-mono break-all">
         {unhealthy.map((probe) => (
           <li key={probe}>
             {PROBE_LABELS[probe]}：{health[probe]}
@@ -54,12 +54,12 @@ export const HealthPanel = () => {
 
   let body: ReactNode = null
   if (isPending) {
-    body = <p className={styles.muted}>正在检查后端服务…</p>
+    body = <p className="m-0 text-[13px] text-fg-muted">正在检查后端服务…</p>
   } else if (error) {
     body = (
       <>
-        <p className={styles.error}>{describeHealthError(error)}</p>
-        <p className={styles.muted}>GET /api/health · {error.code}</p>
+        <p className="m-0 text-[13px] text-danger">{describeHealthError(error)}</p>
+        <p className="m-0 text-[13px] text-fg-muted">GET /api/health · {error.code}</p>
       </>
     )
   } else if (data) {
@@ -67,17 +67,19 @@ export const HealthPanel = () => {
   }
 
   return (
-    <section className={styles.panel} aria-live="polite">
-      <div className={styles.head}>
-        <h2 className={styles.title}>后端服务（DEV）</h2>
-        <button
-          type="button"
-          className={styles.button}
+    <section className="fixed right-4 bottom-4 z-[9999] max-w-[320px] flex flex-col gap-2 p-4 bg-surface text-fg border border-border rounded-card shadow-card" aria-live="polite">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="m-0 text-sm">后端服务（DEV）</h2>
+        <Button
+          variant="secondary"
+          active
+          size="sm"
+          className="disabled:opacity-60 disabled:cursor-default"
           onClick={() => void refetch()}
           disabled={isFetching}
         >
           {isFetching ? '检查中…' : '重新检查'}
-        </button>
+        </Button>
       </div>
       {body}
     </section>

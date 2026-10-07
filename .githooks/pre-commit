@@ -1,0 +1,7 @@
+#!/bin/sh
+# 提交前钩子：先 lint（快），再 typecheck；任一失败则阻止提交。
+# 由 package.json 的 prepare 脚本通过 `git config core.hooksPath .githooks` 接入。
+set -e
+
+npm run lint
+npm run typecheck
