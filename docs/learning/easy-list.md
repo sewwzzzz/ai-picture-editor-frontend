@@ -45,10 +45,12 @@ DOM 就绪 → 执行脚本
 
 2. 401处理
 
-### 
-
 | | 请求体 | 响应(错误)体 |
 |---|---|---|
 | 普通 JSON 请求 |	JSON | JSON ✅ |
 | 上传 | FormData / 二进制(不是 JSON) | 通常还是 JSON |
 | 下载 | JSON(或空)| Blob / 二进制流(不是 JSON) |
+
+### Fast Refresh
+
+- Vite + React 的热更新
